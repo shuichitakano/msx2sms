@@ -793,25 +793,6 @@ public:
 
         memset(&bios[0x3800], 0, 0x3c00 - 0x3800);
 
-#if 1
-        // for ds4
-        // なくていい
-        //        addPagePair(2, 5);
-        //        addPagePair(0x15, 5);
-        //        addPagePair(0xe, 0x5);
-        //        addPagePair(0x6, 0x5);
-        //        addPagePair(0x7, 0x5);
-        //        addPagePair(0xe, 0xf);
-
-        // いる？
-        //        addPagePair(0xe, 0x19);
-        //        addPagePair(0xe, 0x1a);
-        //        addPagePair(0xe, 0x1b);
-        //        addPagePair(0xe, 0x1c);
-
-        addPagePair(0xe, 0x15);
-        addPagePair(0xe, 0x16);
-#endif
         for (auto &str : addPages_)
         {
             int p0, p1;
@@ -894,8 +875,8 @@ public:
 
         ////////////////
         static constexpr int change_bank1 = 0x3c00;
-        static constexpr int change_bank2 = 0x3c0f;
-        static constexpr int change_bank3 = 0x3c37;
+        static constexpr int change_bank2 = 0x3c0c;
+        static constexpr int change_bank3 = 0x3c34;
         static constexpr int cur_bank_addr = 0xf65c;
 
         printf("patch bank change\n");
@@ -904,7 +885,7 @@ public:
             int n = (int)r.entries_.size();
             for (int i = 0; i < n; ++i)
             {
-                bool last = i == n - 1;
+                bool last = i == n - 1; // 連続したサブバンク切り替えでのページ探索を1回にしたい
                 auto &e = r.entries_[i];
                 auto ofs = r.page_ * bankSize_ + e.ofs_;
 
@@ -967,6 +948,45 @@ public:
 
         printf("new rom size = %zd\n", rom.size());
     }
+
+    void makeROM_16KBMapper(std::vector<uint8_t> &rom)
+    {
+        // todo...
+        static constexpr int change_bank0 = 0x3c4a;
+        static constexpr int change_bank1 = 0x3c52;
+        
+        printf("patch bank change\n");
+        for (auto &r : records_)
+        {
+            int n = (int)r.entries_.size();
+            for (int i = 0; i < n; ++i)
+            {
+                auto &e = r.entries_[i];
+                auto ofs = r.page_ * bankSize_ + e.ofs_;
+
+                switch (e.bank_)
+                {
+                case 0:
+                    rom[ofs + 0] = 0xcd;
+                    rom[ofs + 1] = change_bank0 & 255;
+                    rom[ofs + 2] = (change_bank0 >> 8) & 255;
+                    break;
+
+                case 1:
+                    rom[ofs + 0] = 0xcd;
+                    rom[ofs + 1] = change_bank1 & 255;
+                    rom[ofs + 2] = (change_bank1 >> 8) & 255;
+                    break;
+
+                default:
+                    printf("  invalid bank %d.\n", e.bank_);
+                    break;
+                }
+            }
+        }
+    }
+
+
 };
 
 int getKeyAddr(const std::string &str)
@@ -1246,10 +1266,18 @@ int main(int argc, char **argv)
 
         MEGAROMAnalyzer ma;
         ma.analyze(rom);
-        ma.makePagePairSimple();
-
-        // 37c8~ 2104byte位使っても大丈夫そう
-        ma.makeROM(bios, rom);
+        
+        if (ma.bankSize_ == 16384)
+        {
+            ma.makeROM_16KBMapper(rom);
+        }
+        else
+        {
+            ma.makePagePairSimple();
+            
+            // 37c8~ 2104byte位使っても大丈夫そう
+            ma.makeROM(bios, rom);
+        }
         replaceArea(bios, patch, 0x3c00, 0x4000);
     }
 
@@ -1262,3 +1290,5 @@ int main(int argc, char **argv)
     // 0x3c80 にブレーク入れてページを調べる
     // 0xf65c からbank
 }
+
+// dragon slayer 4: -t --pagepair 0e16 --pagepair 0e15
