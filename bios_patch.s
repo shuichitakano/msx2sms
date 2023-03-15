@@ -537,7 +537,7 @@ change_bank1:
 ;	push	de
 	push	af
 	
-	ld	(#cur_bank1), a
+;	ld	(#cur_bank1), a
 	ld	l, a
 	ld	h, #>bank1_table
 	ld	a, (hl)
@@ -611,6 +611,20 @@ change_bank3:
 	sub	a, c
 	jr	change_bank2_3
 
+
+change_bank0_16KB:
+	push af
+	add	a, #2
+	ld (#0xfffe), a
+	pop af
+	ret
+
+change_bank1_16KB:
+	push af
+	add	a, #2
+	ld (#0xffff), a
+	pop af
+	ret
 
 
 find_page_pair:
